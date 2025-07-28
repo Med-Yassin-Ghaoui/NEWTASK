@@ -1,0 +1,8 @@
+date,day_of_week,temperature_max,temperature_min,temperature_mean,apparent_temperature_max,apparent_temperature_min,precipitation_sum,precipitation_probability,wind_speed_max,wind_direction,wind_gusts_max,uv_index,weather_code,weather_description,weather_emoji,sunrise,sunset,fetch_timestamp,current_temperature,current_humidity,current_pressure,current_wind_speed,current_wind_direction
+2025-07-27,Sunday,21.7,15.9,19.0,20.3,15.0,0.0,13,12.0,332,29.9,5.4,80,Slight rain showers,🌦️,05:17,20:56,2025-07-27 00:36:20,19.2,67.0,1017.1,7.9,357.0
+2025-07-28,Monday,23.7,15.5,19.8,22.1,14.8,0.0,3,13.8,307,32.4,5.9,3,Overcast,☁️,05:18,20:55,2025-07-27 00:36:20,,,,,
+2025-07-29,Tuesday,21.7,13.7,17.6,22.0,13.0,2.1,36,11.3,267,29.2,5.05,61,Slight rain,🌦️,05:20,20:53,2025-07-27 00:36:20,,,,,
+2025-07-30,Wednesday,23.8,16.1,19.7,22.8,15.2,0.0,18,10.1,351,27.0,6.05,61,Slight rain,🌦️,05:21,20:51,2025-07-27 00:36:20,,,,,
+2025-07-31,Thursday,26.1,16.0,20.0,24.4,15.7,2.3,22,10.3,303,28.4,6.4,80,Slight rain showers,🌦️,05:23,20:50,2025-07-27 00:36:20,,,,,
+2025-08-01,Friday,23.5,15.9,18.6,21.9,15.1,2.2,23,15.3,321,38.2,5.4,80,Slight rain showers,🌦️,05:24,20:48,2025-07-27 00:36:20,,,,,
+2025-08-02,Saturday,22.3,14.5,18.4,20.8,14.3,0.1,25,11.5,287,28.4,5.35,61,Slight rain,🌦️,05:26,20:47,2025-07-27 00:36:20,,,,,
