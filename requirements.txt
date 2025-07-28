@@ -1,1 +1,2 @@
-streamlit
+streamlit==3.12
+numpy==1.23.5
