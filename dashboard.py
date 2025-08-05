@@ -24,7 +24,7 @@ def load_model_and_features():
             model = pickle.load(f)
             
         # Load feature names
-        with open('feature_names.pkl', 'rb') as f:
+        with open('features_names.pkl', 'rb') as f:
             feature_names = pickle.load(f)
             
         return model, feature_names
@@ -47,13 +47,11 @@ def get_weather_forecast(lat=40.7128, lon=-74.0060):
         "longitude": lon,
         "hourly": [
             "temperature_2m",
-            "relative_humidity_2m", 
             "precipitation",
             "cloud_cover",
             "wind_speed_10m",
             "shortwave_radiation",
-            "direct_radiation",
-            "diffuse_radiation"
+            
         ],
         "forecast_days": 7,
         "timezone": "auto"
@@ -74,7 +72,7 @@ def get_weather_forecast(lat=40.7128, lon=-74.0060):
         return None
 
 def process_weather_data(weather_data, feature_names):
-    """Convert weather API response to model input format"""
+    """Convert weather API response to model input format with proper feature mapping"""
     if not weather_data or 'hourly' not in weather_data:
         return None, None
         
@@ -89,59 +87,64 @@ def process_weather_data(weather_data, feature_names):
             'cloud_cover': hourly.get('cloud_cover', [0] * len(hourly['time'])),
             'wind_speed_10m': hourly.get('wind_speed_10m', [0] * len(hourly['time'])),
             'shortwave_radiation': hourly.get('shortwave_radiation', [0] * len(hourly['time'])),
-            'direct_radiation': hourly.get('direct_radiation', [0] * len(hourly['time'])),
-            'diffuse_radiation': hourly.get('diffuse_radiation', [0] * len(hourly['time']))
+            
         })
         
         # Add time-based features
         df['hour'] = df['datetime'].dt.hour
-        df['day'] = df['datetime'].dt.dayofyear  # Day of year (1-365/366)
+        df['day'] = df['datetime'].dt.dayofyear  # Day of year (1-365/366) - this matches your model
         df['month'] = df['datetime'].dt.month
         
-        # Create timestamp feature (Unix timestamp)
-        df['timestamp'] = df['datetime'].astype(np.int64) // 10**9
+        # No timestamp feature needed for this model
         
-        # Calculate sunshine hours estimate (simplified)
-        # Assuming max 12 hours of daylight, inversely related to cloud cover
-        df['H_sun'] = np.maximum(0, 12 * (1 - df['cloud_cover'] / 100))
+        # H_sun will be handled in the feature mapping loop if it exists in the model
         
-        # Map API data to your model's expected features
-        feature_mapping = {
-            'timestamp': 'timestamp',
-            'Basel Precipitation Total': 'precipitation',
-            'Basel Cloud Cover Total': 'cloud_cover', 
-            'Basel Shortwave Radiation': 'shortwave_radiation',
-            'Basel Longwave Radiation': 'direct_radiation',  # Using direct radiation as proxy
-            'Basel UV Radiation': 'diffuse_radiation',  # Using diffuse radiation as proxy
-            'H_sun': 'H_sun',
-            'T2m': 'temperature_2m',
-            'WS10m': 'wind_speed_10m',
-            'hour': 'hour',
-            'day': 'day',
-            'month': 'month'
-        }
-        
-        # Initialize feature array
+        # Initialize feature array with zeros
         X = np.zeros((len(df), len(feature_names)))
         
-        # Map available features
+        # Create exact mapping based on your actual model's features
+        # Your model features: ['Basel Precipitation Total', 'Basel Cloud Cover Total', 
+        # 'Basel Shortwave Radiation', 'T2m', 'WS10m', 'hour', 'day', 'month']
+        
         for i, feature in enumerate(feature_names):
-            if feature in feature_mapping and feature_mapping[feature] in df.columns:
-                X[:, i] = df[feature_mapping[feature]].values
+            if feature == 'Basel Precipitation Total':
+                X[:, i] = df['precipitation'].values
+            elif feature == 'Basel Cloud Cover Total':
+                X[:, i] = df['cloud_cover'].values
+            elif feature == 'Basel Shortwave Radiation':
+                X[:, i] = df['shortwave_radiation'].values
+            elif feature == 'T2m':
+                X[:, i] = df['temperature_2m'].values
+            elif feature == 'WS10m':
+                X[:, i] = df['wind_speed_10m'].values
+            elif feature == 'hour':
+                X[:, i] = df['hour'].values
+            elif feature == 'day':
+                X[:, i] = df['day'].values  # Day of year (1-365/366)
+            elif feature == 'month':
+                X[:, i] = df['month'].values
             else:
-                # Fill missing features with reasonable defaults
+                # Handle any unexpected features with reasonable defaults
+                st.warning(f"Unknown feature encountered: {feature}. Using default value 0.")
+                X[:, i] = 0
+        
+        # Data quality checks and corrections
+        # Replace any NaN values with appropriate defaults
+        for i, feature in enumerate(feature_names):
+            col_data = X[:, i]
+            if np.any(np.isnan(col_data)) or np.any(np.isinf(col_data)):
                 if 'radiation' in feature.lower():
-                    X[:, i] = 0  # No radiation data available
+                    X[:, i] = np.nan_to_num(col_data, nan=0.0, posinf=1000.0, neginf=0.0)
                 elif 'precipitation' in feature.lower():
-                    X[:, i] = 0  # No precipitation
+                    X[:, i] = np.nan_to_num(col_data, nan=0.0, posinf=100.0, neginf=0.0)
                 elif 'temperature' in feature.lower() or 'T2m' in feature:
-                    X[:, i] = 20  # Default temperature in Celsius
+                    X[:, i] = np.nan_to_num(col_data, nan=20.0, posinf=50.0, neginf=-20.0)
                 elif 'wind' in feature.lower() or 'WS' in feature:
-                    X[:, i] = 5  # Default wind speed
+                    X[:, i] = np.nan_to_num(col_data, nan=5.0, posinf=30.0, neginf=0.0)
                 elif 'cloud' in feature.lower():
-                    X[:, i] = 50  # Default cloud cover percentage
+                    X[:, i] = np.nan_to_num(col_data, nan=50.0, posinf=100.0, neginf=0.0)
                 else:
-                    X[:, i] = 0  # Default to 0 for other features
+                    X[:, i] = np.nan_to_num(col_data, nan=0.0)
         
         return X, df['datetime']
     
@@ -159,16 +162,28 @@ def main():
     lat = st.sidebar.number_input("Latitude", value=40.7128, format="%.4f", min_value=-90.0, max_value=90.0)
     lon = st.sidebar.number_input("Longitude", value=-74.0060, format="%.4f", min_value=-180.0, max_value=180.0)
     
-    # Display current feature names for debugging
-    if st.sidebar.checkbox("Show Model Features"):
+    # Display current feature names and mapping for debugging
+    if st.sidebar.checkbox("Show Feature Mapping"):
         try:
             _, feature_names = load_model_and_features()
             if feature_names:
-                st.sidebar.write("Model expects these features:")
-                for i, feature in enumerate(feature_names):
-                    st.sidebar.write(f"{i+1}. {feature}")
+                st.sidebar.write("**Model Features → API Data Mapping:**")
+                feature_mapping_display = {
+                    'Basel Precipitation Total': 'precipitation (mm)',
+                    'Basel Cloud Cover Total': 'cloud_cover (%)',
+                    'Basel Shortwave Radiation': 'shortwave_radiation (W/m²)',
+                    'T2m': 'temperature_2m (°C)',
+                    'WS10m': 'wind_speed_10m (m/s)',
+                    'hour': 'hour of day (0-23)',
+                    'day': 'day of year (1-365/366)',
+                    'month': 'month (1-12)'
+                }
+                
+                for feature in feature_names:
+                    mapping = feature_mapping_display.get(feature, 'Unknown mapping')
+                    st.sidebar.write(f"• **{feature}** ← {mapping}")
         except:
-            st.sidebar.write("Could not load feature names")
+            st.sidebar.write("Could not load feature mapping")
     
     # Create a unique key based on location to detect changes
     location_key = f"{lat:.4f}_{lon:.4f}"
@@ -196,6 +211,9 @@ def main():
                 st.info("Expected files: 'solar_energy_model.pkl' and 'feature_names.pkl'")
                 return
             
+            # Display feature count info
+            st.info(f"Model expects {len(feature_names)} features: {', '.join(feature_names)}")
+            
             # Get weather forecast
             weather_data = get_weather_forecast(lat, lon)
             
@@ -210,6 +228,9 @@ def main():
                 st.error("Could not process weather data.")
                 return
             
+            # Display data shape for debugging
+            st.info(f"Processed data shape: {X.shape} (should be [n_samples, {len(feature_names)}])")
+            
             # Make predictions
             try:
                 predictions = model.predict(X)
@@ -221,6 +242,7 @@ def main():
                     'predictions': predictions,
                     'timestamps': timestamps,
                     'weather_data': weather_data,
+                    'processed_features': X,
                     'location': {'lat': lat, 'lon': lon}
                 }
                 
@@ -233,6 +255,7 @@ def main():
             except Exception as e:
                 st.error(f"Error making predictions: {e}")
                 st.info("This might be due to feature mismatch between the model and processed data.")
+                st.info(f"Expected features: {len(feature_names)}, Got: {X.shape[1] if X is not None else 'None'}")
                 return
     
     # Display forecast if available
@@ -309,7 +332,7 @@ def main():
         # Daily breakdown
         st.subheader("Daily Production Summary")
         
-        # Group by day
+       
         df_daily = pd.DataFrame({
             'timestamp': timestamps,
             'production': predictions
@@ -329,6 +352,12 @@ def main():
             hide_index=True,
             use_container_width=True
         )
+        
+        # Feature values preview (for debugging)
+        if st.checkbox("Show Processed Feature Values (First 24 Hours)"):
+            feature_df = pd.DataFrame(data['processed_features'][:24], columns=data.get('feature_names', [f'Feature_{i}' for i in range(data['processed_features'].shape[1])]))
+            feature_df.insert(0, 'Time', timestamps[:24])
+            st.dataframe(feature_df, use_container_width=True)
         
         # Weather data preview (optional)
         if st.checkbox("Show Weather Data Details"):
